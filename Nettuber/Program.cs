@@ -1,13 +1,10 @@
-﻿using System.ComponentModel;
-using System.Runtime.InteropServices;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Nettuber;
+﻿using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using VTS.Core;
-using System.Net.NetworkInformation;
-
+using WatsonWebserver;
+using WatsonWebserver.Lite;
+using WatsonWebserver.Core;
 
 // This is a simple example of how to use the VTS plugin in C#.
 // You can use this as a starting point for your own plugin implementation
@@ -122,6 +119,15 @@ catch (VTSException error)
 {
     logger.LogError(error); // Log any errors that occur during initialization
 }
+WebserverSettings settings = new WebserverSettings("127.0.0.1", 9098);
+WebserverBase server = new WatsonWebserver.Lite.WebserverLite(settings, DefaultRoute);
+
+server.StartAsync();
 
 var host = builder.Build(); // Build the host
+
 await host.RunAsync();
+
+
+static async Task DefaultRoute(HttpContextBase ctx) =>
+  await ctx.Response.Send("Hello from the default route!");
