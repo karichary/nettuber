@@ -77,8 +77,11 @@ try
                         coord.ToBarycentricCoordinate());
                     if (pinResult == null) { break; }
                     Thread.Sleep(1000);
-                } catch (VTSException error) {
-                    if (error.ErrorData.data.errorID != ErrorID.ItemPinRequestGivenItemNotLoaded) {
+                }
+                catch (VTSException error)
+                {
+                    if (error.ErrorData.data.errorID != ErrorID.ItemPinRequestGivenItemNotLoaded)
+                    {
                         throw;
                     }
                     logger.Log("Ending tracking.");
@@ -108,12 +111,15 @@ try
     logger.Log("The current model is: " + currentModel.data.modelName);
 
     // Subscribe to your events here using the plugin.SubscribeTo* methods
-    await plugin.SubscribeToBackgroundChangedEvent((backgroundInfo) => {
+    await plugin.SubscribeToBackgroundChangedEvent((backgroundInfo) =>
+    {
         logger.Log("The background was changed to: " + backgroundInfo.data.backgroundName);
     });
     // To unsubscribe, use the plugin.UnsubscribeFrom* methods
 }
-catch (VTSException error) {
+
+catch (VTSException error)
+{
     logger.LogError(error); // Log any errors that occur during initialization
 }
 
