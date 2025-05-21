@@ -2057,7 +2057,7 @@ namespace VTS.Core {
 		[System.Serializable]
 		public class Data {
 			public VTSItemEventType itemEventType;
-			public string itemInsanceID;
+			public string itemInstanceID;
 			public string itemFileName;
 			public Pair itemPosition;
 		}
