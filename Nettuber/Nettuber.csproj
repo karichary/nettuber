@@ -8,16 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <Reference Include="WebSocketSharp">
+      <HintPath>.\VTS\Core\Implementations\WebsocketSharp\websocket-sharp.dll</HintPath>
+    </Reference>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
     <PackageReference Include="Watson" Version="3.3.0" />
     <PackageReference Include="Watson.Core" Version="6.3.9" />
     <PackageReference Include="Watson.Lite" Version="6.3.9" />
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>.\VTS\Core\Implementations\Newtonsoft\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="WebSocketSharp">
-      <HintPath>.\VTS\Core\Implementations\WebsocketSharp\websocket-sharp.dll</HintPath>
-    </Reference>
+    
   </ItemGroup>
 
 </Project>

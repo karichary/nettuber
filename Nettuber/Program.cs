@@ -5,6 +5,7 @@ using VTS.Core;
 using WatsonWebserver;
 using WatsonWebserver.Lite;
 using WatsonWebserver.Core;
+using Nettuber;
 
 // This is a simple example of how to use the VTS plugin in C#.
 // You can use this as a starting point for your own plugin implementation
@@ -35,8 +36,9 @@ try
     //await plugin.RequestPermission(VTSPermission.LoadCustomImagesAsItems);
 
     var apiState = await plugin.GetAPIState();
-
-
+    MeshLocator meshLocator = new();
+    meshLocator.LoadLocations();
+    
     logger.Log("Using VTubeStudio " + apiState.data.vTubeStudioVersion);
     var currentModel = await plugin.GetCurrentModel();
     var clickSubscription = await plugin.SubscribeToModelClickedEvent(
@@ -119,8 +121,9 @@ catch (VTSException error)
 {
     logger.LogError(error); // Log any errors that occur during initialization
 }
-WebserverSettings settings = new WebserverSettings("127.0.0.1", 9098);
-WebserverBase server = new WatsonWebserver.Lite.WebserverLite(settings, DefaultRoute);
+WebserverSettings settings = new("127.0.0.1", 9098);
+WebserverBase server = new WebserverLite(settings, DefaultRoute);
+server.Routes.PreAuthentication.Parameter.Add(WatsonWebserver.Core.HttpMethod.GET, "/registerLocs/{locs}", RegisterLocationsRoute, ExceptionRoute)
 
 server.StartAsync();
 
@@ -129,5 +132,16 @@ var host = builder.Build(); // Build the host
 await host.RunAsync();
 
 
+
+static async Task RegisterLocationsRoute(HttpContextBase ctx) =>
+MeshLocator.
+  await ctx.Response.Send("");
+
 static async Task DefaultRoute(HttpContextBase ctx) =>
   await ctx.Response.Send("Hello from the default route!");
+
+static async Task ExceptionRoute(HttpContextBase cts, Exception e)
+{
+    cts.Response.StatusCode = 500;
+    await cts.Response.Send(e.Message);
+}
