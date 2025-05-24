@@ -12,10 +12,15 @@ public class MeshLocator
     ConcurrentDictionary<string, ArtMeshCoordinate> modelLoci = new();
     private string dataPath = "./modelLocs.json";
 
+    public void Initialize() {
+
+        LoadLocations();
+    }
+
     public void LoadLocations()
     {
         string meshData = File.ReadAllText(dataPath);
-        modelLoci = JsonSerializer.Deserialize<ConcurrentDictionary<string, ArtMeshCoordinate>>(meshData) ?? throw new SerializationException { };     
+        modelLoci = JsonSerializer.Deserialize<ConcurrentDictionary<string, ArtMeshCoordinate>>(meshData) ?? throw new SerializationException { };
     }
     public void SaveLocations()
     {
@@ -27,7 +32,7 @@ public class MeshLocator
     {
         foreach (var loc in locNames)
         {
-             
+            
         }
         throw new NotImplementedException { };
     }
