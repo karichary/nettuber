@@ -6,6 +6,7 @@ using WatsonWebserver;
 using WatsonWebserver.Lite;
 using WatsonWebserver.Core;
 using Nettuber;
+using WebSocketSharp;
 
 // This is a simple example of how to use the VTS plugin in C#.
 // You can use this as a starting point for your own plugin implementation
@@ -16,13 +17,14 @@ ConsoleVTSLoggerImpl logger = new(); // Create a logger to log messages to the c
 
 CoreVTSPlugin plugin = new(logger, 60, "Puppeteer", "KariChary", "");
 
+VTSEventHandler eventHandler = new(logger, plugin);
+
+MeshLocator meshLocator = new(logger, eventHandler, plugin);
+
+
 // List<Action<VTSItemEventData>> itemConsumers = [];
 
 string[] requestedMeshes = ["Forehead", "RightHand", "LeftHand"];
- 
-// Mesh name identifier -> coordinate
-ConcurrentDictionary<string, ArtMeshCoordinate> modelLoci = new();
-
 
 try
 {
@@ -36,11 +38,9 @@ try
     //await plugin.RequestPermission(VTSPermission.LoadCustomImagesAsItems);
 
     var apiState = await plugin.GetAPIState();
-    MeshLocator meshLocator = new();
-    meshLocator.LoadLocations();
-    
     logger.Log("Using VTubeStudio " + apiState.data.vTubeStudioVersion);
     var currentModel = await plugin.GetCurrentModel();
+    /*
     var clickSubscription = await plugin.SubscribeToModelClickedEvent(
         new VTSModelClickedEventConfigOptions(),
         async (clickData) =>
@@ -94,6 +94,7 @@ try
             // await plugin.UnloadItem(unloadInst);
         }
     );
+    */
     var itemSubscription = await plugin.SubscribeToItemEvent(
         new VTSItemEventConfigOptions(),
         (itemData) =>
@@ -121,9 +122,10 @@ catch (VTSException error)
 {
     logger.LogError(error); // Log any errors that occur during initialization
 }
+
 WebserverSettings settings = new("127.0.0.1", 9098);
 WebserverBase server = new WebserverLite(settings, DefaultRoute);
-server.Routes.PreAuthentication.Parameter.Add(WatsonWebserver.Core.HttpMethod.GET, "/registerLocs/{locs}", RegisterLocationsRoute, ExceptionRoute)
+server.Routes.PreAuthentication.Parameter.Add(WatsonWebserver.Core.HttpMethod.GET, "/registerLocs/{locs}", RegisterLocationsRoute, ExceptionRoute);
 
 server.StartAsync();
 
@@ -133,12 +135,17 @@ await host.RunAsync();
 
 
 
-static async Task RegisterLocationsRoute(HttpContextBase ctx) =>
-MeshLocator.
+async Task RegisterLocationsRoute(HttpContextBase ctx) {
+    if (!ctx.Request.Url.Parameters.Contains("locs"))
+    {
+        ctx.Response.StatusCode = 400;
+    } else {
+        meshLocator.RegisterLocations(ctx.Request.Url.Parameters["locs"].Split(','), true);
+    }
   await ctx.Response.Send("");
-
-static async Task DefaultRoute(HttpContextBase ctx) =>
-  await ctx.Response.Send("Hello from the default route!");
+}
+    static async Task DefaultRoute(HttpContextBase ctx) =>
+      await ctx.Response.Send("Hello from the default route!");
 
 static async Task ExceptionRoute(HttpContextBase cts, Exception e)
 {
