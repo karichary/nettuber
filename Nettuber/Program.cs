@@ -21,6 +21,8 @@ VTSEventHandler eventHandler = new(logger, plugin);
 
 MeshLocator meshLocator = new(logger, eventHandler, plugin);
 
+LoopManager loopManager;
+
 
 // List<Action<VTSItemEventData>> itemConsumers = [];
 
@@ -35,87 +37,13 @@ try
         () => logger.LogWarning("Disconnected!"));
     logger.Log("Connected!");
 
+
+
     //await plugin.RequestPermission(VTSPermission.LoadCustomImagesAsItems);
 
-    var apiState = await plugin.GetAPIState();
-    logger.Log("Using VTubeStudio " + apiState.data.vTubeStudioVersion);
-    var currentModel = await plugin.GetCurrentModel();
-    /*
-    var clickSubscription = await plugin.SubscribeToModelClickedEvent(
-        new VTSModelClickedEventConfigOptions(),
-        async (clickData) =>
-        {
-            // logger.Log(JsonConvert.SerializeObject(clickData, Formatting.Indented));
-            // Only right click on model registers
-            if (!clickData.data.modelWasClicked || clickData.data.mouseButtonID != 1) { return; }
-            ArtMeshCoordinate coord = new();
-            foreach (ArtMeshHit mesh in clickData.data.artMeshHits)
-            {
-                if (mesh.artMeshOrder == 0)
-                {
-                    coord = mesh.hitInfo;
-                    break;
-                }
-            }
-            if (coord.modelID == "") { return; }
+    await meshLocator.PostAuthenticationCallbacks();
 
-            var checkerItem = await plugin.LoadItem("transp.png", new VTSItemLoadOptions());
-            string inst = checkerItem.data.instanceID;
-            while (true)
-            {
-                try
-                {
-                    var pinResult = await plugin.PinItemToPoint(
-                        inst,
-                        coord.modelID,
-                        coord.artMeshID,
-                        0.0f,
-                        VTSItemAngleRelativityMode.RelativeToModel,
-                        0.01f,
-                        VTSItemSizeRelativityMode.RelativeToWorld,
-                        coord.ToBarycentricCoordinate());
-                    if (pinResult == null) { break; }
-                    Thread.Sleep(1000);
-                }
-                catch (VTSException error)
-                {
-                    if (error.ErrorData.data.errorID != ErrorID.ItemPinRequestGivenItemNotLoaded)
-                    {
-                        throw;
-                    }
-                    logger.Log("Ending tracking.");
-                    break;
-                }
-
-            }
-            // VTSItemUnloadOptions unloadInst = new() {
-            //    itemInstanceIDs = [inst]
-            //};
-            // await plugin.UnloadItem(unloadInst);
-        }
-    );
-    */
-    var itemSubscription = await plugin.SubscribeToItemEvent(
-        new VTSItemEventConfigOptions(),
-        (itemData) =>
-        {
-            logger.Log(JsonConvert.SerializeObject(itemData.data, Formatting.Indented));
-            /*
-            foreach (Action<VTSItemEventData> action in itemConsumers)
-            {
-                action(itemData);
-            }
-            */
-        }
-    );
-    logger.Log("The current model is: " + currentModel.data.modelName);
-
-    // Subscribe to your events here using the plugin.SubscribeTo* methods
-    await plugin.SubscribeToBackgroundChangedEvent((backgroundInfo) =>
-    {
-        logger.Log("The background was changed to: " + backgroundInfo.data.backgroundName);
-    });
-    // To unsubscribe, use the plugin.UnsubscribeFrom* methods
+    loopManager = new LoopManager(meshLocator);
 }
 
 catch (VTSException error)
@@ -123,32 +51,10 @@ catch (VTSException error)
     logger.LogError(error); // Log any errors that occur during initialization
 }
 
-WebserverSettings settings = new("127.0.0.1", 9098);
-WebserverBase server = new WebserverLite(settings, DefaultRoute);
-server.Routes.PreAuthentication.Parameter.Add(WatsonWebserver.Core.HttpMethod.GET, "/registerLocs/{locs}", RegisterLocationsRoute, ExceptionRoute);
+WebserverFactory factory = new WebserverFactory(9098, meshLocator);
 
-server.StartAsync();
+factory.GetServer().StartAsync();
 
 var host = builder.Build(); // Build the host
 
 await host.RunAsync();
-
-
-
-async Task RegisterLocationsRoute(HttpContextBase ctx) {
-    if (!ctx.Request.Url.Parameters.Contains("locs"))
-    {
-        ctx.Response.StatusCode = 400;
-    } else {
-        meshLocator.RegisterLocations(ctx.Request.Url.Parameters["locs"].Split(','), true);
-    }
-  await ctx.Response.Send("");
-}
-    static async Task DefaultRoute(HttpContextBase ctx) =>
-      await ctx.Response.Send("Hello from the default route!");
-
-static async Task ExceptionRoute(HttpContextBase cts, Exception e)
-{
-    cts.Response.StatusCode = 500;
-    await cts.Response.Send(e.Message);
-}

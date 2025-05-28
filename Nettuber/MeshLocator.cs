@@ -9,6 +9,10 @@ using System.Runtime.InteropServices;
 using System.ComponentModel.Design;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using System.Configuration.Assemblies;
+using System.Collections.Immutable;
+using Microsoft.Extensions.FileProviders;
 
 namespace Nettuber;
 
@@ -27,21 +31,15 @@ public class MeshLocator
 
     private readonly ConcurrentQueue<Tuple<string, bool>> toRegister = [];
 
-    bool inSelectionDialogue;
+    bool inSelectionDialogue = false;
 
     string callbackUuid = "";
 
-    int _tickInterval = 50;
-
     class UnregisteredLocationException : Exception;
 
-    Dictionary<string, string> trackersToLocs;
+    Dictionary<string, string> trackersToLocs = new();
 
-	private readonly CancellationTokenSource _cancelToken;
-
-    private Task _trackLoop;
-
-    Dictionary<string, Tuple<float, float>> locations;
+    Dictionary<string, Tuple<float, float>> locations = new();
 
     public string CurrentModel { get; private set; }
 
@@ -57,7 +55,6 @@ public class MeshLocator
     public void Initialize()
     {
         LoadLocations();
-        this._trackLoop = TrackLoop(this._cancelToken.Token);
     }
 
     public void LoadLocations()
@@ -80,6 +77,7 @@ public class MeshLocator
     }
 
     private string CreateTrackingCallback() {
+        logger.Log("created tracking callback");
         return handler.AddEventCallback(
             async e =>
             {
@@ -87,6 +85,29 @@ public class MeshLocator
                 {
                     locations[trackersToLocs[e.data.itemInstanceID]] = new Tuple<float, float>(e.data.itemPosition.x, e.data.itemPosition.y);
                 }
+            }
+        );
+    }
+
+    public async Task PostAuthenticationCallbacks()
+    {
+        CreateTrackingCallback();
+        callbackUuid = CreateRegCallback();
+        await CreateCurrentModelCallback();
+
+    }
+
+    private async Task<string> CreateCurrentModelCallback() {
+        if (CurrentModel == null)
+        {
+            var currentModelData = await plugin.GetCurrentModel();
+            logger.Log($"Current model: {currentModelData.data.modelID}");
+            CurrentModel = currentModelData.data.modelID;
+        }
+        return handler.AddEventCallback(
+            async e =>
+            {
+                if (e.data.modelLoaded) this.CurrentModel = e.data.modelID;
             }
         );
     }
@@ -145,72 +166,71 @@ public class MeshLocator
         );
     }
 
-    public async void UpdateTrackingItems(string[] trackedLocations, bool trackAll) {
+    private async Task<List<string>> getAllTrackingItemsInScene()
+    {
         VTSItemListOptions opts = new();
         opts.onlyItemsWithFileName = "transp.png";
         opts.includeItemInstancesInScene = true;
         var currentTrackers = await plugin.GetItemList(opts);
-        var trackers = new HashSet<string>();
+        List<string> trackers = [];
         foreach (var inst in currentTrackers.data.itemInstancesInScene)
         {
             trackers.Add(inst.instanceID);
         }
-        string[] removable = [];
-        foreach (var pair in trackersToLocs)
+        return trackers;
+    }
+
+    private List<string> getTrackableLocations(string[] trackedLocations, bool trackAll)
+    {
+        HashSet<string> trackables = [];
+        foreach (var locus in modelLoci)
         {
-            if (!trackers.Contains(pair.Key) || (!trackAll && !trackedLocations.Contains(pair.Value)))
+            if (locus.Value.ContainsKey(CurrentModel))
             {
-                removable.Append(pair.Key);
-                continue;
+                logger.Log($"Can track {locus.Key}");
+                trackables.Add(locus.Key);
             }
         }
-        foreach (var remove in removable)
-        {
-            trackersToLocs.Remove(remove);
-        }
-        // unloadables
-        trackers.ExceptWith(trackersToLocs.Keys);
 
-        string[] missingLocations = [];
-        foreach (var location in modelLoci.Keys)
+        if (trackAll)
         {
-            if (!trackAll && !trackedLocations.Contains(location)) continue;
-            if (!modelLoci[location].ContainsKey(CurrentModel)) continue;
-            if (trackersToLocs.Values.Contains(location)) continue;
-            missingLocations.Append(location);
+            return trackables.ToList();
         }
-        if (missingLocations.Count() >= trackers.Count)
+        foreach (var loc in trackedLocations)
         {
+            logger.Log($"want to track: {loc}");
+        }
+        trackables.IntersectWith(trackedLocations);
+        return trackables.ToList();
+    }
 
-            int excess = missingLocations.Count() - trackers.Count;
-            for (int i = 0; i < excess; i++)
+    public async void UpdateTrackingItems(string[] trackedLocations, bool trackAll)
+    {
+        var trackers = await getAllTrackingItemsInScene();
+        var trackables = getTrackableLocations(trackedLocations, trackAll);
+
+        int excess = trackers.Count() - trackables.Count();
+        logger.Log($"{trackers.Count()} trackers found for {trackables.Count()} locs");
+        if (excess > 0)
+        {
+            VTSItemUnloadOptions opts = new();
+            opts.itemInstanceIDs = trackers.GetRange(0, excess).ToArray();
+            await plugin.UnloadItem(opts);
+            trackers.RemoveRange(0, excess);
+        }
+        if (excess < 0)
+        {
+            for (int i = 0; i < -excess; i++)
             {
                 var newItem = await plugin.LoadItem("transp.png", new());
-                trackersToLocs[newItem.data.instanceID] = missingLocations[i];
-            }
-            int j = excess;
-            foreach (string tracker in trackers)
-            {
-                trackersToLocs[tracker] = missingLocations[j];
-                j++;
+                trackers.Add(newItem.data.instanceID);
             }
         }
-        else
-        {
-            int excessTrack = trackers.Count - missingLocations.Count();
-            int k = 0;
-            foreach (string tracker in trackers)
-            {
-                trackersToLocs[tracker] = missingLocations[k];
-                k++;
-                if (k == excessTrack) break;
-            }
-            trackers.ExceptWith(trackersToLocs.Keys);
-            var unloadOpts = new VTSItemUnloadOptions();
-            unloadOpts.itemInstanceIDs = trackers.ToArray<string>();
-            await plugin.UnloadItem(unloadOpts);
+        trackersToLocs.Clear();
+        for (int j = 0; j < trackers.Count(); j++) {
+            trackersToLocs.Add(trackers[j], trackables[j]);
         }
-        PinTrackers();    
+        PinTrackers();
     }
 
     public void RegisterLocations(string[] locNames, bool specifyArtMesh)
@@ -227,6 +247,7 @@ public class MeshLocator
 
     public async Task<Tuple<float, float>> GetPosition(string loc)
     {
+        logger.Log($"Locations: {locations}, TrackerToLocs: {trackersToLocs}, currentModel: {CurrentModel}");
         if (!locations.ContainsKey(loc) || !trackersToLocs.Values.Contains(loc))
         {
             throw new UnregisteredLocationException();
@@ -234,17 +255,13 @@ public class MeshLocator
         return locations[loc];
     }
 
-    private async Task TrackLoop(CancellationToken token)
+    public async void Tick()
     {
-        float intervalInSeconds = ((float)this._tickInterval) / 1000f;
-        while (!token.IsCancellationRequested)
-        {
-            PinTrackers();
-            await Task.Delay(this._tickInterval);
-        }
+        PinTrackers();
     }
 
     private async void PinTrackers() {
+
         Parallel.ForEach(trackersToLocs,
         async (item) =>
         {

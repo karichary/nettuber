@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO.Pipes;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -25,8 +27,8 @@ namespace VTS.Core {
 		private IVTSLogger _logger = null;
 
 		// API Callbacks
-		private readonly Dictionary<string, VTSCallbacks> _callbacks = new Dictionary<string, VTSCallbacks>();
-		private readonly Dictionary<string, VTSEventCallbacks> _events = new Dictionary<string, VTSEventCallbacks>();
+		private readonly ConcurrentDictionary<string, VTSCallbacks> _callbacks = new ConcurrentDictionary<string, VTSCallbacks>();
+		private readonly ConcurrentDictionary<string, VTSEventCallbacks> _events = new ConcurrentDictionary<string, VTSEventCallbacks>();
 
 		// UDP 
 		private const int UDP_DEFAULT_PORT = 47779;
@@ -267,7 +269,7 @@ namespace VTS.Core {
 		public void Send<T, K>(T request, Action<K> onSuccess, Action<VTSErrorData> onError) where T : VTSMessageData where K : VTSMessageData {
 			if (this._ws != null) {
 				try {
-					this._callbacks.Add(request.requestID, new VTSCallbacks((k) => { onSuccess((K)k); }, onError));
+					this._callbacks.TryAdd(request.requestID, new VTSCallbacks((k) => { onSuccess((K)k); }, onError));
 					// make sure to remove null properties
 					string output = this._json.ToJson(request);
 					this._ws.Send(output);
@@ -292,10 +294,10 @@ namespace VTS.Core {
 				(s) => {
 					// add event or remove event from register
 					if (this._events.ContainsKey(request.data.eventName)) {
-						this._events.Remove(request.data.eventName);
+						this._events.TryRemove(request.data.eventName, out _);
 					}
 					if (request.GetSubscribed()) {
-						this._events.Add(request.data.eventName, new VTSEventCallbacks((k) => { onEvent((K)k); }, onError, resubscribe));
+						this._events.TryAdd(request.data.eventName, new VTSEventCallbacks((k) => { onEvent((K)k); }, onError, resubscribe));
 					}
 					onSubscribe(s);
 				},
@@ -491,7 +493,7 @@ namespace VTS.Core {
 								error.data.message = e.Message;
 								this._callbacks[response.requestID].onError(error);
 							}
-							this._callbacks.Remove(response.requestID);
+							this._callbacks.TryRemove(response.requestID, out _);
 						}
 					}
 				}
