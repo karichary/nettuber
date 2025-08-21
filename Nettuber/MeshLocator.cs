@@ -1,18 +1,8 @@
 
 using System.Collections.Concurrent;
 using VTS.Core;
-using System.Text.Json;
-using Microsoft.VisualBasic;
-using System.ComponentModel;
 using System.Runtime.Serialization;
-using System.Runtime.InteropServices;
-using System.ComponentModel.Design;
-using Microsoft.Extensions.Logging;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
-using System.Configuration.Assemblies;
 using System.Collections.Immutable;
-using Microsoft.Extensions.FileProviders;
 
 namespace Nettuber;
 
@@ -263,6 +253,7 @@ public class MeshLocator
     private async void PinTrackers() {
 
         Parallel.ForEach(trackersToLocs,
+        
         async (item) =>
         {
             var trackerId = item.Key;

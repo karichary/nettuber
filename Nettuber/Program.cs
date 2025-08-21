@@ -21,6 +21,8 @@ VTSEventHandler eventHandler = new(logger, plugin);
 
 MeshLocator meshLocator = new(logger, eventHandler, plugin);
 
+AnimationManager animationManager = new(logger, plugin, meshLocator);
+
 LoopManager loopManager;
 
 
@@ -43,7 +45,9 @@ try
 
     await meshLocator.PostAuthenticationCallbacks();
 
-    loopManager = new LoopManager(meshLocator);
+    loopManager = new LoopManager(meshLocator, animationManager);
+
+    animationManager.UnleashJellyfish();
 }
 
 catch (VTSException error)

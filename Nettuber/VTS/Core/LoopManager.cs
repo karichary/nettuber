@@ -9,9 +9,12 @@
 
         private readonly MeshLocator meshLocator;
 
-        public LoopManager(MeshLocator meshLocator)
+        private readonly AnimationManager animationManager;
+
+        public LoopManager(MeshLocator meshLocator, AnimationManager animationManager)
         {
             this.meshLocator = meshLocator;
+            this.animationManager = animationManager;
             this._cancelToken = new CancellationTokenSource();
             this._tickLoop = TickLoop(this._cancelToken.Token);
 
@@ -30,14 +33,14 @@
         private void Tick(float timeDelta)
         {
             meshLocator.Tick();
+            animationManager.Tick(timeDelta);
         }
 
         private async Task TickLoop(CancellationToken token)
         {
-            float intervalInSeconds = ((float)this._tickInterval) / 1000f;
             while (!token.IsCancellationRequested)
             {
-                Tick(intervalInSeconds);
+                Tick(this._tickInterval);
                 await Task.Delay(this._tickInterval);
             }
         }
